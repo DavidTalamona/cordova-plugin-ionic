@@ -267,11 +267,7 @@ public class IonicDeploy extends CordovaPlugin {
 
       if(!IonicDeploy.NO_DEPLOY_AVAILABLE.equals(uuid)) {
         logMessage("LOAD", "Init Deploy Version");
-        if (this.isDebug()) {
-          this.showDebug();
-        } else {
-          this.redirect(uuid);
-        }
+        this.redirect(uuid);
       }
     }
     return null;
@@ -330,16 +326,16 @@ public class IonicDeploy extends CordovaPlugin {
       return true;
     } else if (action.equals("extract")) {
       logMessage("EXTRACT", "Extracting update");
-      final String uuid = this.getUUID("");
+      final String upstream_uuid = prefs.getString("upstream_uuid", "");
       cordova.getThreadPool().execute(new Runnable() {
         public void run() {
-          unzip("www.zip", uuid, callbackContext);
+          unzip("www.zip", upstream_uuid, callbackContext);
         }
       });
       return true;
     } else if (action.equals("redirect")) {
-      final String uuid = this.getUUID("");
-      this.redirect(uuid);
+	  final String upstream_uuid = prefs.getString("upstream_uuid", "");
+      this.redirect(upstream_uuid);
       callbackContext.success();
       return true;
     } else if (action.equals("info")) {
@@ -769,11 +765,7 @@ public class IonicDeploy extends CordovaPlugin {
       if (callbackContext != null) {
         callbackContext.success("true");
       } else if (this.autoUpdate.equals("auto")) {
-        if (this.isDebug()) {
-          this.showDebug();
-        } else {
-          this.redirect(this.getUUID(""));
-        }
+        this.redirect(this.getUUID(""));
       } else {
         removeSplashScreen();
       }
@@ -879,11 +871,7 @@ public class IonicDeploy extends CordovaPlugin {
     if (callbackContext != null) {
       callbackContext.success("done");
     } else if (this.autoUpdate.equals("auto")) {
-      if (this.isDebug()) {
-        this.showDebug();
-      } else {
-        this.redirect(this.getUUID(""));
-      }
+      this.redirect(this.getUUID(""));
     } else {
       removeSplashScreen();
     }
@@ -976,47 +964,6 @@ public class IonicDeploy extends CordovaPlugin {
     }
 
     return indexStr;
-  }
-
-  public synchronized void showDebug() {
-    final CordovaInterface cordova = this.cordova;
-    final IonicDeploy weak = this;
-
-    Runnable runnable = new Runnable() {
-      public void run() {
-
-        AlertDialog.Builder dlg = new AlertDialog.Builder(cordova.getActivity(), AlertDialog.THEME_DEVICE_DEFAULT_LIGHT);
-        dlg.setMessage("A newer version of this app is available on this device.\nWould you like to update or stay on the bundled version?\n(This warning only appears in debug builds)");
-        dlg.setTitle("Deploy: Debug");
-        dlg.setCancelable(false);
-
-        dlg.setNegativeButton("Ignore",
-          new AlertDialog.OnClickListener() {
-            public void onClick(DialogInterface dialog, int which) {
-              weak.removeSplashScreen();
-              dialog.dismiss();
-            }
-          });
-
-        dlg.setPositiveButton("Update",
-          new AlertDialog.OnClickListener() {
-            public void onClick(DialogInterface dialog, int which) {
-              weak.redirect(weak.getUUID(""));
-              dialog.dismiss();
-            }
-          });
-
-        int currentapiVersion = android.os.Build.VERSION.SDK_INT;
-        dlg.create();
-        AlertDialog dialog =  dlg.show();
-        if (currentapiVersion >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
-          TextView messageview = (TextView)dialog.findViewById(android.R.id.message);
-          messageview.setTextDirection(android.view.View.TEXT_DIRECTION_LOCALE);
-        }
-      };
-    };
-
-    this.cordova.getActivity().runOnUiThread(runnable);
   }
 
   private int getSplashId() {
