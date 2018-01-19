@@ -19,8 +19,6 @@
 
 - (struct JsonHttpResponse) postDeviceDetails;
 
-- (void) showDebugDialog;
-
 - (void) updateVersionLabel:(NSString *)uuid;
 
 - (void) initVersionChecks;
