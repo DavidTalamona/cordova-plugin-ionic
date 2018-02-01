@@ -487,8 +487,14 @@ public class IonicDeploy extends CordovaPlugin {
 		// modify the new "index.html" file
 		final File versionDir = this.myContext.getDir(upstream_uuid, Context.MODE_PRIVATE);
 		try {
+			if (!versionDir.exists()) {
+				throw new Exception("Extracted directory not existing");
+			}
 			// Parse new index as a string and update the cordova.js reference
 			File newIndexFile = new File(versionDir, "index.html");
+			if (!newIndexFile.exists()) {
+				throw new Exception("Extracted index.html not existing");
+			}
 			String newIndex = IonicDeploy.updateIndexCordovaReference(getStringFromFile(newIndexFile.toURI().toString()));
 
 			// Save the new index.html
@@ -497,16 +503,11 @@ public class IonicDeploy extends CordovaPlugin {
 			fw.close();
 		} catch (Exception e) {
 			logMessage("MODIFY INDEX.HTML", "Pre-redirect cordova injection exception: " + Log.getStackTraceString(e));
+			if (versionDir.exists()) {
+				this.removeVersion(upstream_uuid);
+			}
 			callbackContext.error(e.getMessage());
 			return;
-		}
-
-		// store new version and remove old one
-		final String prev_uuid = this.getUUID();
-		this.prefs.edit().putString("benefits_uuid", upstream_uuid).apply();
-		this.prefs.edit().remove("benefits_upstream_uuid").apply();
-		if (!prev_uuid.equals("")) {
-			this.removeVersion(prev_uuid);
 		}
 
 		callbackContext.success("true");
@@ -517,15 +518,30 @@ public class IonicDeploy extends CordovaPlugin {
 	 *
 	 * @param uuid the UUID of the deploy to redirect to
 	 **/
-	private void redirect(final String uuid) {
+	private void redirect(String uuid) {
 		if (!uuid.equals("")) {
+			// activate new version (once only)
+			String upstream_uuid = prefs.getString("benefits_upstream_uuid", "");
+			if (!upstream_uuid.equals("")) {
+				// store new version and remove old one
+				final String prev_uuid = this.getUUID();
+				this.prefs.edit().putString("benefits_uuid", upstream_uuid).apply();
+				this.prefs.edit().remove("benefits_upstream_uuid").apply();
+				if (!prev_uuid.equals("")) {
+					this.removeVersion(prev_uuid);
+				}
+				uuid = upstream_uuid;
+			}
+
+			final String uuidThread = uuid;
+
 			// Load in the new index.html
 			cordova.getActivity().runOnUiThread(new Runnable() {
 				@Override
 				public void run() {
-					logMessage("REDIRECT", "Loading deploy version: " + uuid);
+					logMessage("REDIRECT", "Loading deploy version: " + uuidThread);
 					try {
-						final String indexLocation = new File(myContext.getDir(uuid, Context.MODE_PRIVATE), "index.html").toURI().toString();
+						final String indexLocation = new File(myContext.getDir(uuidThread, Context.MODE_PRIVATE), "index.html").toURI().toString();
 						webView.loadUrlIntoView(indexLocation, false);
 						webView.clearHistory();
 					} catch (Exception e) {
