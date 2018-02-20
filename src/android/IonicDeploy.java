@@ -191,7 +191,11 @@ public class IonicDeploy extends CordovaPlugin {
 			});
 			return true;
 		} else if (action.equals("redirect")) {
-			this.redirect(this.getUUID());
+			final String upstream_uuid = this.prefs.getString("benefits_upstream_uuid", "");
+			if (!upstream_uuid.equals("")) {
+				logMessage("LOAD", "Switch to new deploy version and cleanup old one");
+				this.redirect(upstream_uuid);
+			}
 			callbackContext.success();
 			return true;
 		} else if (action.equals("info")) {
@@ -465,6 +469,9 @@ public class IonicDeploy extends CordovaPlugin {
 				}
 			}
 
+			this.prefs.edit().remove("benefits_upstream_uuid").apply();
+			this.removeVersion(upstream_uuid);
+
 			callbackContext.error(e.getMessage());
 			return;
 		}
@@ -506,6 +513,7 @@ public class IonicDeploy extends CordovaPlugin {
 			if (versionDir.exists()) {
 				this.removeVersion(upstream_uuid);
 			}
+			this.prefs.edit().remove("benefits_upstream_uuid").apply();
 			callbackContext.error(e.getMessage());
 			return;
 		}
@@ -522,27 +530,52 @@ public class IonicDeploy extends CordovaPlugin {
 		if (!uuid.equals("")) {
 			// activate new version (once only)
 			String upstream_uuid = prefs.getString("benefits_upstream_uuid", "");
-			if (!upstream_uuid.equals("")) {
-				// store new version and remove old one
-				final String prev_uuid = this.getUUID();
-				this.prefs.edit().putString("benefits_uuid", upstream_uuid).apply();
-				this.prefs.edit().remove("benefits_upstream_uuid").apply();
-				if (!prev_uuid.equals("")) {
-					this.removeVersion(prev_uuid);
+			if (upstream_uuid.equals(uuid)) {
+				logMessage("REDIRECT", "upsteam version detected: " + upstream_uuid);
+				final File indexLocation = new File(myContext.getDir(upstream_uuid, Context.MODE_PRIVATE), "index.html");
+				if (indexLocation.exists()) {
+					logMessage("REDIRECT", "upsteam version index.html exists");
+					// store new version and remove old one
+					final String prev_uuid = this.getUUID();
+					this.prefs.edit().putString("benefits_uuid", upstream_uuid).apply();
+					this.prefs.edit().putString("benefits_binary_version", this.binary_version).apply();
+					this.prefs.edit().remove("benefits_upstream_uuid").apply();
+					if (!prev_uuid.equals("")) {
+						this.removeVersion(prev_uuid);
+					}
+					uuid = upstream_uuid;
+				} else {
+					logMessage("REDIRECT", "upsteam version index.html does NOT EXIST");
+					this.prefs.edit().remove("benefits_upstream_uuid").apply();
+					this.removeVersion(upstream_uuid);
+					uuid = this.getUUID();
+					if (uuid.equals("")) {
+						return;
+					}
 				}
-				uuid = upstream_uuid;
 			}
 
-			final String uuidThread = uuid;
+			// clear ionic version if new binary is detected / app updated but not ionic update directory cleared
+			if (this.binary_version != prefs.getString("benefits_binary_version", "")) {
+				this.prefs.edit().remove("benefits_uuid").apply();
+				this.prefs.edit().remove("benefits_binary_version").apply();
+				this.removeVersion(uuid);
+				return;
+			}
 
 			// Load in the new index.html
+			final String uuidInternal = uuid;
 			cordova.getActivity().runOnUiThread(new Runnable() {
 				@Override
 				public void run() {
-					logMessage("REDIRECT", "Loading deploy version: " + uuidThread);
+					logMessage("REDIRECT", "Loading deploy version: " + uuidInternal);
 					try {
-						final String indexLocation = new File(myContext.getDir(uuidThread, Context.MODE_PRIVATE), "index.html").toURI().toString();
-						webView.loadUrlIntoView(indexLocation, false);
+						final File indexLocation = new File(myContext.getDir(uuidInternal, Context.MODE_PRIVATE), "index.html");
+						if (!indexLocation.exists()) {
+							prefs.edit().remove("benefits_upstream_uuid").apply();
+							throw new Exception("UUID index.html not existing");
+						}
+						webView.loadUrlIntoView(indexLocation.toURI().toString(), false);
 						webView.clearHistory();
 					} catch (Exception e) {
 						logMessage("REDIRECT", "Pre-redirect cordova injection exception: " + Log.getStackTraceString(e));
